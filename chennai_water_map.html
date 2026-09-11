@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chennai Urban Flood & Rainfall Simulator</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Left Control Sidebar for Simulation */
+        .sim-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            width: 320px;
+            border: 1px solid #ddd;
+        }
+
+        .sim-panel h2 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #0f172a;
+        }
+
+        .control-group {
+            margin-bottom: 12px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        .control-group input[type="range"],
+        .control-group select {
+            width: 100%;
+        }
+
+        .run-btn {
+            width: 100%;
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 9px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 6px;
+            transition: 0.2s;
+        }
+
+        .run-btn:hover {
+            background: #0369a1;
+        }
+
+        /* Right Telemetry Dashboard */
+        .dashboard {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            width: 300px;
+            border: 1px solid #ddd;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .metric-label {
+            color: #64748b;
+        }
+
+        .metric-value {
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .flooded {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .slow-drain {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .drained {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .legend {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="map"></div>
+
+    <!-- Left Simulation Config Panel -->
+    <div class="sim-panel">
+        <h2>Rainfall & Ground Simulator</h2>
+
+        <div class="control-group">
+            <label>Rainfall Amount: <span id="val-rain">30 mm</span></label>
+            <input type="range" id="input-rain" min="5" max="150" value="30" step="5" />
+        </div>
+
+        <div class="control-group">
+            <label>Rain Duration: <span id="val-duration">30 min</span></label>
+            <input type="range" id="input-duration" min="10" max="180" value="30" step="10" />
+        </div>
+
+        <div class="control-group">
+            <label>Ground / Surface Permeability:</label>
+            <select id="input-surface">
+                <option value="0.85">Dense Urban (Paved concrete, low green cover)</option>
+                <option value="0.65" selected>Mixed (Asphalt roads with 20% trees/soil)</option>
+                <option value="0.30">Green Heavy (Parks, open grounds, permeable soil)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>City Stormwater Drainage Health:</label>
+            <select id="input-drainage">
+                <option value="0.8">100% Functional (Clean storm canals)</option>
+                <option value="0.4" selected>Partially Clogged (50% silt accumulation)</option>
+                <option value="0.1">Severely Choked (Monsoon flash flood risk)</option>
+            </select>
+        </div>
+
+        <button class="run-btn" onclick="runSimulation()">Recalculate Flood Impact</button>
+
+        <div class="legend">
+            <strong>Post-Rain Street Status:</strong>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #dc2626;"></div> Waterlogged / Inundated
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f59e0b;"></div> Slow Drainage (High Water Depth)
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #16a34a;"></div> Fast Drain / Clear Roads
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Telemetry Panel -->
+    <div class="dashboard">
+        <h3 style="font-size: 14px; margin-bottom: 10px;">Road Telemetry</h3>
+        <div class="metric-row"><span class="metric-label">Road Name:</span><span class="metric-value"
+                id="disp-name">Hover on a road</span></div>
+        <div class="metric-row"><span class="metric-label">Elevation:</span><span class="metric-value" id="disp-elev">--
+                m MSL</span></div>
+        <div class="metric-row"><span class="metric-label">Surface Runoff:</span><span class="metric-value"
+                id="disp-runoff">-- mm</span></div>
+        <div class="metric-row"><span class="metric-label">Water Retention Depth:</span><span class="metric-value"
+                id="disp-depth">-- cm</span></div>
+        <div class="metric-row"><span class="metric-label">Status:</span><span id="disp-status">--</span></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        const map = L.map('map').setView([13.0360, 80.2220], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        let roadsData = [];
+        let roadLayers = [];
+        let selectedRoad = null;
+
+        // UI Input listeners
+        document.getElementById('input-rain').oninput = e => document.getElementById('val-rain').innerText = `${e.target.value} mm`;
+        document.getElementById('input-duration').oninput = e => document.getElementById('val-duration').innerText = `${e.target.value} min`;
+
+        // Fetch OpenStreetMap Road geometry for T. Nagar / Saidapet / Kodambakkam
+        const overpassQuery = `
+      [out:json][timeout:25];
+      (
+        way["highway"~"primary|secondary|tertiary|residential"](13.020,80.205,13.050,80.240);
+      );
+      out geom;
+    `;
+
+        fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(overpassQuery))
+            .then(res => res.json())
+            .then(data => {
+                roadsData = data.elements;
+                runSimulation();
+            });
+
+        function calculateElevation(lat, lon) {
+            // Base regional gradient towards Bay of Bengal (East/South-East)
+            const baseElev = 15 - ((lon - 80.20) * 160);
+            const localDip = Math.sin(lat * 1500) * 1.5;
+            return Math.max(1.8, Math.round((baseElev + localDip) * 10) / 10);
+        }
+
+        function runSimulation() {
+            // Clear previous layers
+            roadLayers.forEach(layer => map.removeLayer(layer));
+            roadLayers = [];
+
+            const rainMM = parseFloat(document.getElementById('input-rain').value);
+            const durationMin = parseFloat(document.getElementById('input-duration').value);
+            const runoffCoeff = parseFloat(document.getElementById('input-surface').value); // C
+            const drainFactor = parseFloat(document.getElementById('input-drainage').value);
+
+            // Hydrology Model:
+            // Net runoff water on surface = Rain * Runoff Coefficient
+            const totalRunoffMM = rainMM * runoffCoeff;
+            // Drainage capacity per hour modulated by slope and municipal drainage
+            const intensity = rainMM / (durationMin / 60);
+
+            roadsData.forEach(road => {
+                if (!road.geometry || road.geometry.length < 2) return;
+
+                const coords = road.geometry.map(pt => [pt.lat, pt.lon]);
+                const centerPt = coords[Math.floor(coords.length / 2)];
+                const elev = calculateElevation(centerPt[0], centerPt[1]);
+
+                // Hydraulic clearance rate based on elevation slope:
+                // High elevation (>8m) clears out fast by gravity; low elevation (<5m) retains water
+                const gravityDischarge = (elev / 15) * drainFactor * 40;
+
+                // Final Water Retention Depth in CM
+                let retainedWaterCM = Math.max(0, ((totalRunoffMM - gravityDischarge) / 10));
+                retainedWaterCM = Math.round(retainedWaterCM * 10) / 10;
+
+                let status = "Drained / Dry";
+                let roadColor = "#16a34a"; // Green (Safe)
+                let weight = 4;
+
+                if (retainedWaterCM > 2.5) {
+                    status = "Flooded / Waterlogged";
+                    roadColor = "#dc2626"; // Red (Severe)
+                    weight = 6;
+                } else if (retainedWaterCM > 0.8) {
+                    status = "Slow Drainage";
+                    roadColor = "#f59e0b"; // Yellow (Warning)
+                    weight = 5;
+                }
+
+                const polyline = L.polyline(coords, { color: roadColor, weight: weight, opacity: 0.75 }).addTo(map);
+
+                polyline.on('mouseover', function () {
+                    if (selectedRoad) selectedRoad.setStyle({ opacity: 0.75 });
+                    selectedRoad = this;
+                    this.setStyle({ opacity: 1.0, weight: 8 });
+
+                    const name = road.tags?.name || road.tags?.highway + " street";
+                    document.getElementById('disp-name').innerText = name;
+                    document.getElementById('disp-elev').innerText = `${elev} m MSL`;
+                    document.getElementById('disp-runoff').innerText = `${Math.round(totalRunoffMM)} mm`;
+                    document.getElementById('disp-depth').innerText = `${retainedWaterCM} cm`;
+
+                    const statusElem = document.getElementById('disp-status');
+                    if (retainedWaterCM > 2.5) statusElem.innerHTML = `<span class="status-badge flooded">${status}</span>`;
+                    else if (retainedWaterCM > 0.8) statusElem.innerHTML = `<span class="status-badge slow-drain">${status}</span>`;
+                    else statusElem.innerHTML = `<span class="status-badge drained">${status}</span>`;
+                });
+
+                roadLayers.push(polyline);
+            });
+        }
+    </script>
+</body>
+
+</html>

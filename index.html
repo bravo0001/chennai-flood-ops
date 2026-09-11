@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Greater Chennai City-Wide Flood Simulator</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0f19; }
+    #map { width: 100%; height: 100%; }
+
+    /* Left Control Sidebar */
+    .sim-panel {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(10px);
+      padding: 16px 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      width: 330px;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #f8fafc;
+    }
+
+    .sim-panel h2 { font-size: 15px; margin-bottom: 12px; color: #38bdf8; letter-spacing: 0.5px; }
+    .control-group { margin-bottom: 12px; }
+    .control-group label { display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-bottom: 5px; }
+    .control-group input[type="range"], .control-group select {
+      width: 100%;
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid #334155;
+      padding: 5px;
+      border-radius: 6px;
+    }
+
+    .run-btn {
+      width: 100%;
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 5px;
+      transition: background 0.2s;
+    }
+    .run-btn:hover { background: #0369a1; }
+    .run-btn:disabled { background: #334155; cursor: not-allowed; }
+
+    /* Loading Progress Bar Container */
+    .progress-box {
+      margin-top: 12px;
+      display: none;
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 8px;
+      border: 1px solid #334155;
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: #0f172a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: #38bdf8;
+      transition: width 0.1s ease;
+    }
+    .progress-text {
+      font-size: 11px;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Right Telemetry Dashboard */
+    .dashboard {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(10px);
+      padding: 16px 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      width: 340px;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #f8fafc;
+    }
+
+    .dashboard h3 { font-size: 14px; margin-bottom: 10px; color: #38bdf8; }
+    .metric-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; }
+    .metric-label { color: #94a3b8; }
+    .metric-value { font-weight: 700; color: #fff; text-align: right; max-width: 180px; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .flooded { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid #ef4444; }
+    .slow-drain { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid #f59e0b; }
+    .drained { background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid #22c55e; }
+
+    .legend {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 11px;
+      color: #cbd5e1;
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .legend-color { width: 14px; height: 4px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <!-- Simulation Control Panel -->
+  <div class="sim-panel">
+    <h2>Chennai Flood & Rain Model</h2>
+    
+    <div class="control-group">
+      <label>Rainfall Intensity: <span id="val-rain" style="color:#38bdf8; font-weight:bold;">35 mm/hr</span></label>
+      <input type="range" id="input-rain" min="5" max="150" value="35" step="5" />
+    </div>
+
+    <div class="control-group">
+      <label>Rain Storm Duration: <span id="val-duration" style="color:#38bdf8; font-weight:bold;">30 min</span></label>
+      <input type="range" id="input-duration" min="10" max="180" value="30" step="10" />
+    </div>
+
+    <div class="control-group">
+      <label>Stormwater Pipe Clog Factor:</label>
+      <select id="input-drainage">
+        <option value="1.0">Clean Pipes (100% Flow)</option>
+        <option value="0.5" selected>Partially Choked (50% Silt Deposition)</option>
+        <option value="0.15">Severely Blocked (15% Flow)</option>
+      </select>
+    </div>
+
+    <button class="run-btn" id="btn-run" onclick="triggerSimulation()">Run Simulation</button>
+
+    <!-- Real-time Loading Indicator -->
+    <div class="progress-box" id="progress-box">
+      <div class="progress-text">
+        <span id="progress-status">Calculating hydraulics...</span>
+        <span id="progress-percent">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <strong>Road Drainage Status:</strong>
+      <div class="legend-item"><div class="legend-color" style="background: #ef4444;"></div> Severe Inundation (Depth > 15 cm)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div> Water Stagnation (Depth 3 - 15 cm)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #22c55e;"></div> Clear / Free Outflow (< 3 cm)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #00f0ff; height: 6px; width: 6px; border-radius: 50%;"></div> Manhole / Storm Drain Inlet</div>
+      <div class="legend-item"><div class="legend-color" style="background: #00f0ff; border-top: 2px dashed #00f0ff; height:0;"></div> Open Storm Canal / Ditch</div>
+    </div>
+  </div>
+
+  <!-- Telemetry HUD -->
+  <div class="dashboard">
+    <h3>Street Telemetry & Hydraulic Audit</h3>
+    <div class="metric-row"><span class="metric-label">Street Name:</span><span class="metric-value" id="disp-name">Hover over road</span></div>
+    <div class="metric-row"><span class="metric-label">Sea Level Elev:</span><span class="metric-value" id="disp-elev">-- m MSL</span></div>
+    <div class="metric-row"><span class="metric-label">Water Flow:</span><span class="metric-value" id="disp-dir">--</span></div>
+    <div class="metric-row"><span class="metric-label">Surface Material:</span><span class="metric-value" id="disp-surface">--</span></div>
+    <div class="metric-row"><span class="metric-label">Underground Pipe:</span><span class="metric-value" id="disp-pipe">--</span></div>
+    <div class="metric-row"><span class="metric-label">Pipe Outflow Rate:</span><span class="metric-value" id="disp-capacity">-- L/sec</span></div>
+    <div class="metric-row"><span class="metric-label">Surface Water Retention:</span><span class="metric-value" id="disp-depth">-- cm</span></div>
+    <div class="metric-row"><span class="metric-label">Pani Nikalne Ka Waqt:</span><span class="metric-value" id="disp-time" style="color: #38bdf8;">--</span></div>
+    <div class="metric-row" style="margin-top: 6px;"><span class="metric-label">Status:</span><span id="disp-status">--</span></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    const map = L.map('map').setView([13.0450, 80.2300], 12);
+    L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let cityGeoJsonLayer = null;
+    let drainageLayer = null;
+    let rawRoadsData = null;
+    let hoveredLayer = null;
+
+    document.getElementById('input-rain').oninput = e => document.getElementById('val-rain').innerText = `${e.target.value} mm/hr`;
+    document.getElementById('input-duration').oninput = e => document.getElementById('val-duration').innerText = `${e.target.value} min`;
+
+    // 1. Initial Load of Elevated Roads
+    showProgress("Downloading Chennai Road Dataset...", 15);
+    fetch('chennai_roads_elevated.geojson')
+      .then(res => res.json())
+      .then(data => {
+        rawRoadsData = data;
+        showProgress("Data Loaded. Preparing layers...", 60);
+        triggerSimulation();
+      })
+      .catch(err => {
+        alert("File load error! Make sure local server chal raha hai.");
+        hideProgress();
+        console.error(err);
+      });
+
+    // 2. Load Drainage Network
+    fetch('chennai_drainage.geojson')
+      .then(res => res.json())
+      .then(drainData => {
+        drainageLayer = L.geoJSON(drainData, {
+          pointToLayer: function(feature, latlng) {
+            return L.circleMarker(latlng, {
+              radius: 3.5,
+              fillColor: "#00f0ff",
+              color: "#ffffff",
+              weight: 1,
+              opacity: 0.9,
+              fillOpacity: 0.9
+            });
+          },
+          style: { color: "#00f0ff", weight: 2, dashArray: "4, 4", opacity: 0.75 },
+          onEachFeature: function(feature, layer) {
+            const p = feature.properties;
+            let drainType = p.manhole ? `Manhole (${p.manhole})` : (p.waterway ? `Drain Canal (${p.waterway})` : "Storm Drain Inlet");
+            layer.bindTooltip(`<div style="font-size:11px;"><b style="color:#00f0ff;">${drainType}</b><br>Inflow Active</div>`, { sticky: true });
+          }
+        }).addTo(map);
+      })
+      .catch(err => console.log("Drainage file:", err));
+
+    // Progress Helpers
+    function showProgress(msg, percent) {
+      const box = document.getElementById('progress-box');
+      box.style.display = 'block';
+      document.getElementById('progress-status').innerText = msg;
+      document.getElementById('progress-percent').innerText = `${percent}%`;
+      document.getElementById('progress-fill').style.width = `${percent}%`;
+    }
+
+    function hideProgress() {
+      setTimeout(() => {
+        document.getElementById('progress-box').style.display = 'none';
+        document.getElementById('btn-run').disabled = false;
+      }, 400);
+    }
+
+    // 3. Non-blocking Simulation Runner
+    function triggerSimulation() {
+      if (!rawRoadsData) return;
+      document.getElementById('btn-run').disabled = true;
+      showProgress("Simulating hydraulics...", 25);
+
+      setTimeout(() => {
+        runChunkedHydrology();
+      }, 50);
+    }
+
+    function runChunkedHydrology() {
+      if (cityGeoJsonLayer) map.removeLayer(cityGeoJsonLayer);
+
+      const rainIntensityMMPerHour = parseFloat(document.getElementById('input-rain').value);
+      const durationMin = parseFloat(document.getElementById('input-duration').value);
+      const drainFactor = parseFloat(document.getElementById('input-drainage').value);
+
+      showProgress("Updating 50,000+ street colors...", 75);
+
+      setTimeout(() => {
+        cityGeoJsonLayer = L.geoJSON(rawRoadsData, {
+          style: function(feature) {
+            const p = feature.properties;
+            const elev = p.elevation_msl || 4.0;
+            const runoffCoeff = p.runoff_coeff || 0.85;
+
+            // REALISTIC MUNICIPAL DRAINAGE CAPACITY (L/sec)
+            let basePipeLps = 20; // Standard urban residential feeder street
+            const dia = p.pipe_dia_mm || 350;
+            if (dia >= 1200) basePipeLps = 450;
+            else if (dia >= 900) basePipeLps = 220;
+            else if (dia >= 600) basePipeLps = 90;
+            else if (dia === 0) basePipeLps = 5;
+
+            const effectivePipeLps = basePipeLps * drainFactor;
+
+            // Realistic Catchment: Street surface + adjacent rooftops/plot runoff (2,500 m2)
+            const catchmentArea = 2500; 
+
+            // Cumulative Rainfall Calculation
+            const stormHours = durationMin / 60;
+            const totalAccumulatedRainMM = rainIntensityMMPerHour * stormHours;
+            const totalRainVolumeLiters = totalAccumulatedRainMM * catchmentArea;
+            const surfaceRunoffLiters = totalRainVolumeLiters * runoffCoeff;
+
+            // Coastal & Low-Elevation Gravity Penalty (Tidal backwater effect below 4m MSL)
+            const backwaterPenalty = elev < 4.0 ? 0.35 : (elev < 7.0 ? 0.70 : 1.0);
+            const actualDischargeRateLps = effectivePipeLps * backwaterPenalty;
+            const totalDischargedLiters = actualDischargeRateLps * (durationMin * 60);
+
+            // Excess Water Retention & Terrain Inundation Factor
+            const excessLiters = Math.max(0, surfaceRunoffLiters - totalDischargedLiters);
+            const poolingFactor = elev < 3.5 ? 1.7 : (elev < 6.0 ? 1.2 : 0.85);
+
+            const effectiveExcessLiters = excessLiters * poolingFactor;
+            const retainedDepthCM = Math.round(((effectiveExcessLiters / catchmentArea) * 0.1) * 10) / 10;
+
+            p.live_depth = retainedDepthCM;
+            p.excess_liters = Math.round(effectiveExcessLiters);
+            p.effective_pipe_lps = Math.round(actualDischargeRateLps);
+
+            // Clearance Time (Minutes)
+            if (effectiveExcessLiters > 0 && actualDischargeRateLps > 0) {
+              p.drain_time_min = Math.round(effectiveExcessLiters / (actualDischargeRateLps * 60));
+            } else {
+              p.drain_time_min = 0;
+            }
+
+            // Realistic Inundation Classification Thresholds
+            if (retainedDepthCM > 15.0) {
+              return { color: "#ef4444", weight: 2.5, opacity: 0.9 }; // Severe Inundation
+            } else if (retainedDepthCM > 3.0) {
+              return { color: "#f59e0b", weight: 2.0, opacity: 0.75 }; // Water Stagnation
+            } else {
+              return { color: "#22c55e", weight: 1.5, opacity: 0.65 }; // Drained / Passable
+            }
+          },
+          onEachFeature: function(feature, layer) {
+            layer.on({
+              mouseover: function(e) {
+                if (hoveredLayer) cityGeoJsonLayer.resetStyle(hoveredLayer);
+                hoveredLayer = e.target;
+                hoveredLayer.setStyle({ weight: 6, color: "#38bdf8", opacity: 1.0 });
+
+                const p = feature.properties;
+                document.getElementById('disp-name').innerText = p.name || p.highway || "City Street";
+                document.getElementById('disp-elev').innerText = `${p.elevation_msl || '--'} m MSL`;
+                document.getElementById('disp-dir').innerText = p.flow_direction || "--";
+                document.getElementById('disp-surface').innerText = p.surface_material || "Semi-Paved Urban";
+                document.getElementById('disp-pipe').innerText = p.pipe_label || "Standard Feeder Pipe";
+                document.getElementById('disp-capacity').innerText = `${p.effective_pipe_lps !== undefined ? p.effective_pipe_lps : 20} L/sec`;
+                document.getElementById('disp-depth').innerText = `${p.live_depth} cm (${(p.excess_liters || 0).toLocaleString()} L)`;
+
+                if (p.drain_time_min > 0) {
+                  document.getElementById('disp-time').innerText = `~${p.drain_time_min} Min me clear hoga`;
+                } else {
+                  document.getElementById('disp-time').innerText = "Turant drain ho raha hai (0 min)";
+                }
+
+                const statusElem = document.getElementById('disp-status');
+                if (p.live_depth > 15.0) {
+                  statusElem.innerHTML = `<span class="status-badge flooded">Severe Flooding</span>`;
+                } else if (p.live_depth > 3.0) {
+                  statusElem.innerHTML = `<span class="status-badge slow-drain">Water Stagnation</span>`;
+                } else {
+                  statusElem.innerHTML = `<span class="status-badge drained">Free Flow / Safe</span>`;
+                }
+              }
+            });
+          }
+        }).addTo(map);
+
+        showProgress("Rendering Complete!", 100);
+        hideProgress();
+      }, 50);
+    }
+  </script>
+</body>
+</html>
