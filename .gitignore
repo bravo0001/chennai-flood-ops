@@ -1,8 +1,4 @@
-# Large data files
-*.osm.pbf
-*.pbf
-chennai_roads.geojson
-chennai_roads_elevated.geojson
+# Large data files (tracked via Git LFS - see .gitattributes)
 
 # Cache directory
 cache/
