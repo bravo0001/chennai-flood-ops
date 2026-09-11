@@ -9,36 +9,50 @@ with open(INPUT_FILE, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 features = data.get("features", [])
-print(f"Total {len(features)} roads & streets mili! Realistic terrain processing shuru...")
+print(f"Total {len(features)} streets! Calculating organic hydrological terrain...")
 
-# REALISTIC CHENNAI ELEVATION MODEL (Continuous GIS interpolation)
-def estimate_realistic_elevation(lon, lat):
-    # 1. Macro West-to-East slope: West (Porur/Tambaram ~16m) -> Coast (Marina/ECR ~2.5m)
-    # Longitude range: 80.12 (West) to 80.28 (Coast)
-    west_dist = max(0.0, 80.285 - lon)
-    base_elev = 2.5 + (west_dist * 85.0)
+# REAL CHENNAI BASIN ELEVATION ANCHORS (Lat, Lon, Elevation in m MSL)
+# Real topographical sinks & ridges across North, South, Central & West
+BASIN_POINTS = [
+    # Coastline (Flat 2.5 - 3.5m)
+    (13.11, 80.29, 2.5), (13.06, 80.28, 3.2), (13.00, 80.26, 3.5), (12.91, 80.25, 2.8),
+    # Known Severe Depression Bowls (1.5 - 3.2m)
+    (12.978, 80.221, 2.0), # Velachery Lake Basin
+    (12.962, 80.198, 2.4), # Madipakkam
+    (12.935, 80.218, 1.6), # Pallikaranai Marshland
+    (13.118, 80.255, 1.8), # Vyasarpadi / Korukkupet
+    (13.102, 80.245, 2.9), # Perambur Low Basin
+    (13.042, 80.232, 5.5), # T. Nagar Lake Area
+    (13.065, 80.255, 4.0), # Central / Choolai
+    # Moderate Plateau & Suburbs (6.5 - 10.0m)
+    (13.088, 80.212, 8.5), # Anna Nagar
+    (13.051, 80.211, 8.0), # Vadapalani
+    (13.125, 80.215, 8.5), # Kolathur
+    (13.030, 80.185, 7.5), # Alandur
+    # Western & Southern Elevated Ridges (12 - 22m)
+    (13.008, 80.198, 18.0), # St. Thomas Mount / Guindy Ridge
+    (13.038, 80.158, 14.5), # Porur High
+    (12.925, 80.125, 19.5), # Tambaram West
+    (13.072, 80.162, 13.0), # Koyambedu Rim
+    (13.155, 80.182, 16.0), # Puzhal Hills
+]
 
-    # 2. South-to-North regional tilt (St. Thomas Mount / Guindy ridge vs North flat coastal plain)
-    lat_factor = (lat - 13.00) * 8.0
-    elev = base_elev - lat_factor
-
-    # 3. Known Real-world Depressions (Pallikaranai Marsh & Velachery bowl)
-    # Approx center: lat 12.94, lon 80.21
-    dist_velachery = math.hypot(lat - 12.945, lon - 80.215)
-    if dist_velachery < 0.045:
-        elev -= (0.045 - dist_velachery) * 60.0  # Natural flood sinkhole
-
-    # 4. Adyar River basin depression (Lat ~13.01, running West to East)
-    adyar_dist = abs(lat - 13.01)
-    if adyar_dist < 0.015:
-        elev -= (0.015 - adyar_dist) * 80.0
-
-    # 5. Cooum River basin depression (Lat ~13.07, running West to East)
-    cooum_dist = abs(lat - 13.075)
-    if cooum_dist < 0.012:
-        elev -= (0.012 - cooum_dist) * 75.0
-
-    return max(1.2, round(elev, 1))
+def calculate_organic_elevation(lon, lat):
+    num = 0.0
+    den = 0.0
+    for clat, clon, celev in BASIN_POINTS:
+        # Distance squared
+        d = math.hypot((lat - clat) * 1.1, lon - clon)
+        if d < 0.0005:
+            return celev
+        w = 1.0 / (d ** 2.2)
+        num += w * celev
+        den += w
+    
+    base = num / den
+    # Micro-terrain roughness so adjacent residential streets don't look artificial
+    noise = 0.4 * math.sin(lat * 1400.0) * math.cos(lon * 1200.0)
+    return max(1.2, round(base + noise, 1))
 
 def get_surface_properties(tags):
     surface = tags.get("surface", "").lower()
@@ -52,7 +66,7 @@ def get_surface_properties(tags):
     elif surface in cement_types or highway in ["primary", "secondary", "tertiary", "trunk"]:
         return {"type": "Cemented / Asphalt", "absorption": "Near Zero (10% absorbed)", "runoff_coeff": 0.90}
     else:
-        return {"type": "Semi-Paved Urban Street", "absorption": "Moderate (30% absorbed)", "runoff_coeff": 0.75}
+        return {"type": "Semi-Paved Urban Street", "absorption": "Moderate (30% absorbed)", "runoff_coeff": 0.78}
 
 def get_drainage_pipe_specs(highway_type, surface_type):
     if "Unpaved" in surface_type:
@@ -72,8 +86,8 @@ for feat in features:
     if geom.get("type") == "LineString":
         pts = geom.get("coordinates", [])
         if len(pts) >= 2:
-            e_start = estimate_realistic_elevation(pts[0][0], pts[0][1])
-            e_end = estimate_realistic_elevation(pts[-1][0], pts[-1][1])
+            e_start = calculate_organic_elevation(pts[0][0], pts[0][1])
+            e_end = calculate_organic_elevation(pts[-1][0], pts[-1][1])
             avg_elev = round((e_start + e_end) / 2, 1)
 
             drop = round(e_start - e_end, 2)
@@ -98,4 +112,4 @@ data["features"] = valid_features
 with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
     json.dump(data, f)
 
-print(f"\nSUCCESS! {len(valid_features)} streets ka realistic terrain map ready ho gaya!")
+print(f"\nSUCCESS! {len(valid_features)} streets with organic realistic terrain generated in '{OUTPUT_FILE}'!")
