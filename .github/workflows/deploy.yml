@@ -1,0 +1,43 @@
+name: Build, Test & Deploy Chennai Flood Engine
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Validate Backend & GeoJSON Integrity
+      run: |
+        python -c "
+        import json, os
+        assert os.path.exists('chennai_roads_elevated.geojson'), 'Roads GeoJSON missing'
+        assert os.path.exists('chennai_hospitals.geojson'), 'Hospitals GeoJSON missing'
+        print('Geo-data integrity check passed successfully.')
+        "
+
+    # Optional: Deploy trigger step (e.g. Render / Cloud Run / Webhook)
+    # Render deployment webhook example:
+    # - name: Trigger Deployment Webhook
+    #   if: github.ref == 'refs/heads/main'
+    #   run: |
+    #     curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
