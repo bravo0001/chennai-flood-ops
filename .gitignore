@@ -1,29 +1,5 @@
-# Large data files (tracked via Git LFS - see .gitattributes)
-
-# Cache directory
-cache/
-
-# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-
-# Virtual environments
-venv/
-env/
 .venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
+cache/
+southern-zone-latest.osm.pbf

@@ -133,7 +133,7 @@ fetch('/api/hospitals')
   })
   .catch(err => console.error("Hospitals error:", err));
 
-// 5. Hydrology Simulation with Street Hover Telemetry
+// 5. Hydrology Simulation with Street Hover Telemetry & Water Clearance
 function triggerSimulation() {
   if (!rawRoadsData) return;
 
@@ -167,10 +167,18 @@ function triggerSimulation() {
       const netInflow = Math.max(0.0, runoffRateLps - drainRateLps);
       const accumulatedLiters = netInflow * (durationMin * 60.0);
       const poolingMult = 1.0 + (1.8 / Math.pow(elev, 0.65));
-      const depthCM = Math.round(((accumulatedLiters * poolingMult) / roadArea) * 0.1 * 10) / 10;
+      const totalPooledLiters = accumulatedLiters * poolingMult;
+      const depthCM = Math.round(((totalPooledLiters) / roadArea) * 0.1 * 10) / 10;
+
+      // Clearance Time Computation
+      let clearMins = 0;
+      if (depthCM > 0 && drainRateLps > 0) {
+        clearMins = Math.round((totalPooledLiters / drainRateLps) / 60.0);
+      }
 
       p._liveDepth = depthCM;
       p._effectiveLps = Math.round(drainRateLps * 10) / 10;
+      p._clearanceMins = clearMins;
 
       if (depthCM > 7.0) {
         return { color: "#ef4444", weight: 2.5, opacity: 0.9 };
@@ -193,6 +201,7 @@ function triggerSimulation() {
         const surfElem = document.getElementById('disp-surface');
         const capElem = document.getElementById('disp-capacity');
         const depthElem = document.getElementById('disp-depth');
+        const clearElem = document.getElementById('disp-clearance');
         const sElem = document.getElementById('disp-status');
 
         if (nameElem) nameElem.innerText = p.name || p.highway || "City Street";
@@ -201,6 +210,20 @@ function triggerSimulation() {
         if (surfElem) surfElem.innerText = p.surface_material || "Asphalt / Semi-Paved";
         if (capElem) capElem.innerText = `${p._effectiveLps || 6} L/sec`;
         if (depthElem) depthElem.innerText = `${p._liveDepth} cm`;
+
+        // Telemetry Clearance Time Display
+        if (clearElem) {
+          if (p._liveDepth <= 0.2) {
+            clearElem.innerHTML = `<span style="color:#4ade80;">Immediate (Free Flow)</span>`;
+          } else if (p._effectiveLps <= 0.1) {
+            clearElem.innerHTML = `<span style="color:#ef4444;">Stagnant (Zero Drain)</span>`;
+          } else if (p._clearanceMins > 120) {
+            const hrs = (p._clearanceMins / 60).toFixed(1);
+            clearElem.innerHTML = `<span style="color:#ef4444;">~${hrs} hrs (Severe Silt)</span>`;
+          } else {
+            clearElem.innerHTML = `<span style="color:#38bdf8;">~${p._clearanceMins} mins</span>`;
+          }
+        }
 
         if (sElem) {
           if (p._liveDepth > 7.0) {
@@ -411,7 +434,7 @@ window.toggleLiveSync = function(isEnabled) {
 fetchLiveWeather();
 setInterval(fetchLiveWeather, 180000);
 
-// 9. Yellow Municipal Manhole & In-Panel Complaint Flow
+// 9. Municipal Manhole Engine (Yellow Operational, Black Blocked)
 let currentSelectedMh = null;
 
 function loadManholesData() {
@@ -422,7 +445,7 @@ function loadManholesData() {
       const layer = L.geoJSON(data, {
         pointToLayer: (feat, latlng) => {
           const isBlocked = feat.properties.status === "BLOCKED";
-          // Operational = Yellow (.mh-clean), Blocked = Red (.mh-blocked)
+          // Operational = Yellow (.mh-clean), Reported/Blocked = Black (.mh-blocked)
           const iconClass = isBlocked ? "manhole-icon mh-blocked" : "manhole-icon mh-clean";
           return L.marker(latlng, {
             icon: L.divIcon({ className: iconClass, iconSize: [12, 12], iconAnchor: [6, 6] })
@@ -449,8 +472,8 @@ function showManholeCard(props) {
   const isBlocked = props.status === "BLOCKED";
   const badge = document.getElementById('card-status-badge');
   badge.innerHTML = isBlocked
-    ? `<span class="status-badge flooded">🚨 CHOKED / BLOCKED (ALERT SENT)</span>`
-    : `<span class="status-badge slow-drain">⚡ OPERATIONAL CHAMBER (YELLOW)</span>`;
+    ? `<span class="status-badge" style="background:#000; color:#facc15; border:1px solid #facc15;">⚫ CHOKED / BLOCKED (ALERT SENT)</span>`
+    : `<span class="status-badge slow-drain">🟡 OPERATIONAL CHAMBER (YELLOW)</span>`;
 
   if (isBlocked) {
     document.getElementById('card-report-form').style.display = 'none';
@@ -490,7 +513,7 @@ function submitManholeReport() {
     .then(() => {
       alert(`Priority alert sent to Greater Chennai Corporation for ${currentSelectedMh.id}!`);
       closeManholeCard();
-      loadManholesData();
+      loadManholesData(); // Changes marker from Yellow to Black
     });
   };
 
@@ -514,6 +537,6 @@ function resolveCurrentManhole() {
   .then(() => {
     alert(`Chamber ${currentSelectedMh.id} resolved and restored by GCC!`);
     closeManholeCard();
-    loadManholesData();
+    loadManholesData(); // Changes marker back to Yellow
   });
 }
