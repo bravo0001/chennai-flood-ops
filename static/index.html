@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Greater Chennai City-Wide Flood Simulator & Emergency Navigation</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <!-- Left Control Sidebar -->
+  <div class="sim-panel">
+    <h2>Chennai Flood Model Controls</h2>
+    
+    <div class="control-group">
+      <label>Rainfall Intensity: <span id="val-rain">25 mm/hr</span></label>
+      <input type="range" id="input-rain" min="5" max="150" value="25" step="5" />
+    </div>
+
+    <div class="control-group">
+      <label>Storm Duration: <span id="val-duration">60 min</span></label>
+      <input type="range" id="input-duration" min="10" max="180" value="60" step="5" />
+    </div>
+
+    <div class="control-group">
+      <label>Drainage Pipe Silt / Clog Factor:</label>
+      <select id="input-drainage">
+        <option value="1.0">Clean Pipes (100% Flow)</option>
+        <option value="0.5" selected>Partially Choked (50% Silt Deposition)</option>
+        <option value="0.15">Severely Blocked (15% Flow)</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" id="btn-run" onclick="triggerSimulation()">Run Simulation</button>
+
+    <!-- Emergency Safe Navigation Panel -->
+    <div class="nav-box">
+      <h3>Emergency Navigation (A* Backend)</h3>
+      
+      <div class="search-row">
+        <input type="text" id="input-start" class="search-input" placeholder="Your Location (e.g. T. Nagar)..." autocomplete="off" />
+        <div id="results-start" class="search-dropdown"></div>
+      </div>
+
+      <div class="search-row">
+        <input type="text" id="input-end" class="search-input" placeholder="Destination (e.g. Apollo Hospital)..." autocomplete="off" />
+        <div id="results-end" class="search-dropdown"></div>
+      </div>
+
+      <div class="nav-actions">
+        <button class="btn-route" onclick="requestSafeRoute()">Find Safest Route</button>
+        <button class="btn-secondary" onclick="clearNavigation()">Clear</button>
+      </div>
+
+      <div id="route-summary"></div>
+    </div>
+
+    <div class="legend">
+      <strong>Routing & Drainage Legend:</strong>
+      <div class="legend-item"><div class="legend-color" style="background: #00e5ff; height: 4px;"></div> <b>Flood-Safe Route</b> (Solid Light Blue)</div>
+      <div class="legend-item"><div class="legend-color" style="border-top: 2px dashed #ff4757; height: 0; background: transparent;"></div> <b>Normal Route</b> (--- Dashed Line)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #ef4444;"></div> Severe Flooding (&gt; 7 cm)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div> Waterlogging (1.5 - 7 cm)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #22c55e;"></div> Clear & Safe (&lt; 1.5 cm)</div>
+    </div>
+  </div>
+
+  <!-- Right Floating Real-Time Weather HUD Card -->
+  <div class="weather-card">
+    <div class="weather-header">
+      <div>
+        <strong style="font-size:14px; color:#fff;">Chennai</strong>
+        <div style="font-size:10px; color:#94a3b8;">Tamil Nadu, India</div>
+      </div>
+      <div style="text-align:right;">
+        <span class="live-dot"></span> <span id="wt-time" style="font-size:10px; color:#38bdf8;">Syncing...</span>
+      </div>
+    </div>
+
+    <div class="weather-main">
+      <div style="font-size:28px; font-weight:700; color:#fff;" id="wt-temp">--°C</div>
+      <div style="font-size:11px; color:#cbd5e1; margin-top:6px;" id="wt-condition">Checking radar...</div>
+    </div>
+
+    <div class="weather-grid">
+      <div class="wt-item">
+        <span>💧 Rain Rate</span>
+        <b id="wt-rain">0.0 mm/hr</b>
+      </div>
+      <div class="wt-item">
+        <span>💨 Wind Speed</span>
+        <b id="wt-wind">-- km/h</b>
+      </div>
+      <div class="wt-item">
+        <span>🧭 Direction</span>
+        <b id="wt-dir">--</b>
+      </div>
+      <div class="wt-item">
+        <span>🌡️ Humidity</span>
+        <b id="wt-humidity">--%</b>
+      </div>
+    </div>
+
+    <div class="live-toggle-box">
+      <label style="font-size:11px; color:#38bdf8; display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" id="check-live-sync" onchange="toggleLiveSync(this.checked)">
+        <b>Auto-Sync Live Weather to Simulation</b>
+      </label>
+    </div>
+  </div>
+
+  <!-- Street Telemetry & Hydraulic Audit HUD -->
+  <div class="dashboard" id="street-dashboard">
+    <h3>Street Telemetry & Hydraulic Audit</h3>
+    <div class="metric-row"><span class="metric-label">Street Name:</span><span class="metric-value" id="disp-name">Hover over any road</span></div>
+    <div class="metric-row"><span class="metric-label">Sea Level Elev:</span><span class="metric-value" id="disp-elev">-- m MSL</span></div>
+    <div class="metric-row"><span class="metric-label">Water Flow:</span><span class="metric-value" id="disp-dir">--</span></div>
+    <div class="metric-row"><span class="metric-label">Surface Material:</span><span class="metric-value" id="disp-surface">--</span></div>
+    <div class="metric-row"><span class="metric-label">Inlet Intake:</span><span class="metric-value" id="disp-capacity">-- L/sec</span></div>
+    <div class="metric-row"><span class="metric-label">Water Depth:</span><span class="metric-value" id="disp-depth">-- cm</span></div>
+    <div class="metric-row" style="margin-top: 5px;"><span class="metric-label">Status:</span><span id="disp-status">--</span></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

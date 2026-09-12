@@ -1,0 +1,304 @@
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0f19; }
+#map { width: 100%; height: 100%; background: #0b0f19; }
+
+/* Left Simulation Panel */
+.sim-panel {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(0,0,0,0.6);
+  width: 320px;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #f8fafc;
+  max-height: calc(100vh - 30px);
+  overflow-y: auto;
+}
+
+.sim-panel h2 { font-size: 14px; margin-bottom: 10px; color: #38bdf8; }
+.control-group { margin-bottom: 10px; }
+.control-group label { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 4px; }
+.control-group input[type="range"], .control-group select {
+  width: 100%;
+  background: #1e293b;
+  color: #fff;
+  border: 1px solid #334155;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.btn-primary {
+  width: 100%;
+  background: #0284c7;
+  color: white;
+  border: none;
+  padding: 9px;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-primary:hover { background: #0369a1; }
+
+/* Navigation Box */
+.nav-box {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.nav-box h3 { font-size: 13px; color: #f43f5e; margin-bottom: 8px; }
+
+.search-row { position: relative; margin-bottom: 8px; }
+.search-input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #fff;
+  font-size: 12px;
+}
+
+.search-dropdown {
+  position: absolute;
+  top: 35px;
+  left: 0;
+  right: 0;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  z-index: 1002;
+  display: none;
+}
+.dropdown-item {
+  padding: 6px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid #334155;
+  cursor: pointer;
+  color: #e2e8f0;
+}
+.dropdown-item:hover { background: #0284c7; }
+
+.nav-actions { display: flex; gap: 6px; }
+.btn-route {
+  flex: 1;
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-route:hover { background: #059669; }
+.btn-secondary {
+  background: #334155;
+  color: white;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#route-summary {
+  margin-top: 8px;
+  padding: 8px;
+  background: #1e293b;
+  border-radius: 6px;
+  font-size: 11px;
+  display: none;
+  border-left: 3px solid #10b981;
+}
+
+.legend {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  font-size: 10px;
+  color: #cbd5e1;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.legend-color { width: 12px; height: 4px; border-radius: 2px; }
+
+/* Right Top Weather Card (Clean Right Edge) */
+.weather-card {
+  position: absolute;
+  top: 15px;
+  right: 15px; /* Seedha top-right corner par */
+  z-index: 999;
+  width: 250px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  color: #f8fafc;
+}
+
+.weather-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  margin-right: 4px;
+}
+
+.weather-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.weather-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.wt-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.wt-item b {
+  color: #f8fafc;
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+.live-toggle-box {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Layer Control Button: Exactly Below Weather Card (Red Box Position) */
+.leaflet-top.leaflet-right {
+  top: 220px !important; /* Weather card ke theek niche */
+  right: 15px !important;
+  z-index: 1000 !important;
+}
+
+/* Collapsed small icon button */
+.leaflet-touch .leaflet-control-layers,
+.leaflet-control-layers {
+  background: rgba(15, 23, 42, 0.92) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.5) !important;
+  transition: all 0.25s ease-in-out;
+  margin: 0 !important;
+}
+
+.leaflet-control-layers-toggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2338bdf8'%3E%3Cpath d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") !important;
+  background-size: 22px 22px !important;
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* Jab layer icon click/hover par open ho */
+.leaflet-control-layers-expanded {
+  padding: 12px 14px !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+  color: #f8fafc !important;
+  min-width: 220px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 35px rgba(0,0,0,0.7) !important;
+}
+
+.leaflet-control-layers-base {
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.leaflet-control-layers label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-bottom: 6px !important;
+  cursor: pointer;
+  color: #e2e8f0;
+  font-size: 11px;
+}
+
+.leaflet-control-layers input[type="radio"],
+.leaflet-control-layers input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}
+
+/* Bottom Right Telemetry Audit HUD */
+.dashboard {
+  position: absolute;
+  bottom: 20px;
+  right: 15px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  padding: 12px 14px;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+  width: 280px;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #f8fafc;
+}
+.dashboard h3 { font-size: 12px; margin-bottom: 6px; color: #38bdf8; }
+.metric-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+.metric-label { color: #94a3b8; }
+.metric-value { font-weight: 700; color: #fff; text-align: right; max-width: 150px; }
+
+.status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.flooded { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid #ef4444; }
+.slow-drain { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid #f59e0b; }
+.drained { background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid #22c55e; }
+
+/* Hospital cluster icons */
+.hospital-marker {
+  background: #ef4444;
+  color: white;
+  border: 2px solid white;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 18px;
+  font-weight: bold;
+  font-size: 11px;
+}
+.marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+  background-color: rgba(225, 29, 72, 0.9);
+  color: white;
+  font-weight: bold;
+  font-size: 11px;
+}
