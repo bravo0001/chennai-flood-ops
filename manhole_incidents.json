@@ -1,0 +1,42 @@
+{
+  "GCC-MH-29602": {
+    "id": "GCC-MH-29602",
+    "status": "BLOCKED",
+    "notes": "blocked",
+    "image_url": "",
+    "timestamp": "12 Sep 2026, 02:49 PM",
+    "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
+  },
+  "GCC-MH-14996": {
+    "id": "GCC-MH-14996",
+    "status": "BLOCKED",
+    "notes": "Choked with plastic waste & silt",
+    "image_url": "",
+    "timestamp": "12 Sep 2026, 02:58 PM",
+    "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
+  },
+  "GCC-MH-45424": {
+    "id": "GCC-MH-45424",
+    "status": "BLOCKED",
+    "notes": "Choked with plastic waste & silt",
+    "image_url": "",
+    "timestamp": "12 Sep 2026, 03:19 PM",
+    "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
+  },
+  "GCC-MH-60098": {
+    "id": "GCC-MH-60098",
+    "status": "BLOCKED",
+    "notes": "Choked with plastic waste & silt",
+    "image_url": "",
+    "timestamp": "12 Sep 2026, 06:33 PM",
+    "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
+  },
+  "GCC-MH-11879": {
+    "id": "GCC-MH-11879",
+    "status": "BLOCKED",
+    "notes": "Choked with plastic waste & silt",
+    "image_url": "",
+    "timestamp": "12 Sep 2026, 06:34 PM",
+    "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
+  }
+}

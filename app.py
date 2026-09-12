@@ -113,6 +113,42 @@ def get_safe_route(req: RouteRequest):
     router.update_flood_weights(flood_depths)
     return router.find_safe_path(req.start_lat, req.start_lon, req.end_lat, req.end_lon)
 
+# --- USP: Municipal Drainage Asset Endpoints ---
+from drainage_manager import ManholeManager
+
+# Initialize Manhole Manager
+manhole_mgr = ManholeManager("chennai_roads_elevated.geojson")
+
+@app.get("/api/manholes")
+def get_manholes():
+    return JSONResponse(content=manhole_mgr.get_manholes_geojson())
+
+class ReportRequest(BaseModel):
+    id: str
+    notes: str = "Choked with plastic and silt"
+    image_base64: str = ""
+
+@app.post("/api/manhole/report")
+def report_manhole(req: ReportRequest):
+    return manhole_mgr.report_blockage(req.id, req.notes, req.image_base64)
+
+@app.post("/api/manhole/resolve")
+def resolve_manhole(req: BaseModel):
+    # Payload me id aayegi
+    mh_id = getattr(req, "id", None)
+    if not mh_id:
+        # Pydantic dict check
+        pass
+    return {"status": "success"}
+
+# Agar BaseModel se simple handle karna ho:
+class ResolveRequest(BaseModel):
+    id: str
+
+@app.post("/api/manhole/resolve")
+def resolve_manhole(req: ResolveRequest):
+    return manhole_mgr.resolve_blockage(req.id)
+
 # Mount Frontend static directory
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 

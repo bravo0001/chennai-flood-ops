@@ -1,28 +1,56 @@
 // 1. Crystal-Clear, Watermark-Free Basemaps
+const satTile = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+  maxZoom: 20,
+  attribution: '&copy; Google Maps'
+});
+
 const streetTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors'
 });
 
-const satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 18,
-  attribution: '&copy; Esri'
-});
-
 const liveRadarGroup = L.layerGroup();
 
+// Initialize Map with zoomControl moved to bottom-right
 const map = L.map('map', {
   center: [13.0450, 80.2300],
   zoom: 12,
   minZoom: 9,
-  maxZoom: 18,
+  maxZoom: 20,
   layers: [satTile, liveRadarGroup],
+  zoomControl: false,
   preferCanvas: true
 });
 
+// Add Zoom Control at Bottom-Right (Shifted right above telemetry dashboard)
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
 let cityRoadsGroup = L.featureGroup().addTo(map);
-let hospitalClusterGroup = L.markerClusterGroup({ maxClusterRadius: 40 }).addTo(map);
 let navigationGroup = L.featureGroup().addTo(map);
+
+// 1. Red Cluster Group for Hospitals
+let hospitalClusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 40,
+  iconCreateFunction: function(cluster) {
+    return L.divIcon({
+      html: `<div><span>${cluster.getChildCount()}</span></div>`,
+      className: 'marker-cluster hospital-cluster',
+      iconSize: L.point(40, 40)
+    });
+  }
+}).addTo(map);
+
+// 2. Yellow Cluster Group for Municipal Manholes & Inlets
+let manholeClusterGroup = L.markerClusterGroup({
+  maxClusterRadius: 35,
+  iconCreateFunction: function(cluster) {
+    return L.divIcon({
+      html: `<div><span>${cluster.getChildCount()}</span></div>`,
+      className: 'marker-cluster mh-cluster',
+      iconSize: L.point(40, 40)
+    });
+  }
+}).addTo(map);
 
 const baseMaps = {
   "<span style='color:#4ade80;'>🛰️ Satellite</span>": satTile,
@@ -33,10 +61,10 @@ const overlayMaps = {
   "<b style='color:#22c55e;'>🛣️ Road Simulation</b>": cityRoadsGroup,
   "<b style='color:#38bdf8;'>🌧️ Live Clouds / Radar</b>": liveRadarGroup,
   "<b style='color:#ef4444;'>🏥 Hospitals & Trauma</b>": hospitalClusterGroup,
+  "<b style='color:#eab308;'>🕳️ Municipal Manholes & Inlets</b>": manholeClusterGroup,
   "<b style='color:#00e5ff;'>🚑 Emergency Route</b>": navigationGroup
 };
 
-// Collapsed Layer Switcher: Positioned right under Weather Card via CSS
 L.control.layers(baseMaps, overlayMaps, { position: 'topright', collapsed: true }).addTo(map);
 
 // 2. Real-Time Dynamic RainViewer Doppler Radar
@@ -50,10 +78,7 @@ function loadLiveRainViewerRadar() {
       if (frames.length > 0) {
         const latestPath = frames[frames.length - 1].path;
         const radarTileUrl = `${host}${latestPath}/256/{z}/{x}/{y}/2/1_1.png`;
-        const radarLayer = L.tileLayer(radarTileUrl, {
-          opacity: 0.70,
-          zIndex: 500
-        });
+        const radarLayer = L.tileLayer(radarTileUrl, { opacity: 0.70, zIndex: 500 });
         liveRadarGroup.addLayer(radarLayer);
       }
     })
@@ -385,3 +410,110 @@ window.toggleLiveSync = function(isEnabled) {
 
 fetchLiveWeather();
 setInterval(fetchLiveWeather, 180000);
+
+// 9. Yellow Municipal Manhole & In-Panel Complaint Flow
+let currentSelectedMh = null;
+
+function loadManholesData() {
+  fetch('/api/manholes')
+    .then(r => r.json())
+    .then(data => {
+      manholeClusterGroup.clearLayers();
+      const layer = L.geoJSON(data, {
+        pointToLayer: (feat, latlng) => {
+          const isBlocked = feat.properties.status === "BLOCKED";
+          // Operational = Yellow (.mh-clean), Blocked = Red (.mh-blocked)
+          const iconClass = isBlocked ? "manhole-icon mh-blocked" : "manhole-icon mh-clean";
+          return L.marker(latlng, {
+            icon: L.divIcon({ className: iconClass, iconSize: [12, 12], iconAnchor: [6, 6] })
+          });
+        },
+        onEachFeature: (feat, layer) => {
+          layer.on('click', () => showManholeCard(feat.properties));
+        }
+      });
+      manholeClusterGroup.addLayer(layer);
+    })
+    .catch(e => console.error("Manholes fetch error:", e));
+}
+loadManholesData();
+
+function showManholeCard(props) {
+  currentSelectedMh = props;
+  const card = document.getElementById('manhole-incident-card');
+  card.style.display = 'block';
+
+  document.getElementById('card-mh-id').innerText = props.id;
+  document.getElementById('card-mh-street').innerText = `${props.street} (${props.elevation_msl}m MSL)`;
+
+  const isBlocked = props.status === "BLOCKED";
+  const badge = document.getElementById('card-status-badge');
+  badge.innerHTML = isBlocked
+    ? `<span class="status-badge flooded">🚨 CHOKED / BLOCKED (ALERT SENT)</span>`
+    : `<span class="status-badge slow-drain">⚡ OPERATIONAL CHAMBER (YELLOW)</span>`;
+
+  if (isBlocked) {
+    document.getElementById('card-report-form').style.display = 'none';
+    document.getElementById('card-view-details').style.display = 'block';
+    document.getElementById('card-view-notes').innerText = `Report: "${props.report_notes || 'Silt blockage'}" at ${props.last_reported}`;
+    const imgBox = document.getElementById('card-view-img');
+    imgBox.innerHTML = props.image_url 
+      ? `<img src="${props.image_url}" style="max-width:100%; border-radius:5px; max-height:100px; object-fit:cover;" />` 
+      : `<small style="color:#94a3b8; font-size:10px;">No photo attached</small>`;
+  } else {
+    document.getElementById('card-report-form').style.display = 'block';
+    document.getElementById('card-view-details').style.display = 'none';
+    document.getElementById('card-notes').value = '';
+    document.getElementById('card-file-input').value = '';
+  }
+
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeManholeCard() {
+  document.getElementById('manhole-incident-card').style.display = 'none';
+  currentSelectedMh = null;
+}
+
+function submitManholeReport() {
+  if (!currentSelectedMh) return;
+  const notes = document.getElementById('card-notes').value || "Choked with plastic waste & silt";
+  const fileInput = document.getElementById('card-file-input');
+
+  const sendPayload = (base64Img) => {
+    fetch('/api/manhole/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: currentSelectedMh.id, notes: notes, image_base64: base64Img })
+    })
+    .then(r => r.json())
+    .then(() => {
+      alert(`Priority alert sent to Greater Chennai Corporation for ${currentSelectedMh.id}!`);
+      closeManholeCard();
+      loadManholesData();
+    });
+  };
+
+  if (fileInput.files && fileInput.files[0]) {
+    const reader = new FileReader();
+    reader.onload = (e) => sendPayload(e.target.result);
+    reader.readAsDataURL(fileInput.files[0]);
+  } else {
+    sendPayload("");
+  }
+}
+
+function resolveCurrentManhole() {
+  if (!currentSelectedMh) return;
+  fetch('/api/manhole/resolve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: currentSelectedMh.id })
+  })
+  .then(r => r.json())
+  .then(() => {
+    alert(`Chamber ${currentSelectedMh.id} resolved and restored by GCC!`);
+    closeManholeCard();
+    loadManholesData();
+  });
+}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Greater Chennai City-Wide Flood Simulator & Emergency Navigation</title>
+  <title>Chennai Flood Ops & Smart Emergency Routing</title>
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -14,7 +14,7 @@
 
   <div id="map"></div>
 
-  <!-- Left Control Sidebar -->
+  <!-- Left Sidebar Controls -->
   <div class="sim-panel">
     <h2>Chennai Flood Model Controls</h2>
     
@@ -61,17 +61,45 @@
       <div id="route-summary"></div>
     </div>
 
+    <!-- Municipal Manhole Complaint Box (Embedded & Hidden By Default) -->
+    <div id="manhole-incident-card" class="mh-incident-panel" style="display:none;">
+      <div class="mh-card-header">
+        <div>
+          <strong id="card-mh-id" style="color:#eab308; font-size:12px;">GCC-MH-XXXX</strong>
+          <div id="card-mh-street" style="color:#94a3b8; font-size:10px;">Street Location</div>
+        </div>
+        <button class="btn-close-mh" onclick="closeManholeCard()">✕</button>
+      </div>
+
+      <div id="card-status-badge" style="margin: 6px 0;"></div>
+
+      <!-- Action 1: Citizen Blockage Report Form -->
+      <div id="card-report-form">
+        <textarea id="card-notes" placeholder="Describe blockage (e.g. polythene & silt deposition)..." class="mh-textarea"></textarea>
+        <input type="file" id="card-file-input" accept="image/*" class="mh-file-input" />
+        <button class="btn-mh-report" onclick="submitManholeReport()">🚨 Raise Blockage Alert to GCC</button>
+      </div>
+
+      <!-- Action 2: GCC Resolution Panel -->
+      <div id="card-view-details" style="display:none;">
+        <div id="card-view-notes" class="mh-notes-box"></div>
+        <div id="card-view-img" style="text-align:center; margin-top:6px;"></div>
+        <button class="btn-mh-resolve" onclick="resolveCurrentManhole()">✅ Mark Cleared (GCC Resolution)</button>
+      </div>
+    </div>
+
     <div class="legend">
       <strong>Routing & Drainage Legend:</strong>
       <div class="legend-item"><div class="legend-color" style="background: #00e5ff; height: 4px;"></div> <b>Flood-Safe Route</b> (Solid Light Blue)</div>
       <div class="legend-item"><div class="legend-color" style="border-top: 2px dashed #ff4757; height: 0; background: transparent;"></div> <b>Normal Route</b> (--- Dashed Line)</div>
+      <div class="legend-item"><div class="legend-color" style="background: #eab308; border-radius:50%; width:8px; height:8px;"></div> <b>Municipal Inlets</b> (Yellow = Operational)</div>
       <div class="legend-item"><div class="legend-color" style="background: #ef4444;"></div> Severe Flooding (&gt; 7 cm)</div>
       <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div> Waterlogging (1.5 - 7 cm)</div>
       <div class="legend-item"><div class="legend-color" style="background: #22c55e;"></div> Clear & Safe (&lt; 1.5 cm)</div>
     </div>
   </div>
 
-  <!-- Right Floating Real-Time Weather HUD Card -->
+  <!-- Right Floating Real-Time Weather Card -->
   <div class="weather-card">
     <div class="weather-header">
       <div>
@@ -115,10 +143,10 @@
     </div>
   </div>
 
-  <!-- Street Telemetry & Hydraulic Audit HUD -->
+  <!-- Bottom Right Telemetry Audit HUD -->
   <div class="dashboard" id="street-dashboard">
     <h3>Street Telemetry & Hydraulic Audit</h3>
-    <div class="metric-row"><span class="metric-label">Street Name:</span><span class="metric-value" id="disp-name">Hover over any road</span></div>
+    <div class="metric-row"><span class="metric-label">Street Name:</span><span class="metric-value" id="disp-name">Hover over road</span></div>
     <div class="metric-row"><span class="metric-label">Sea Level Elev:</span><span class="metric-value" id="disp-elev">-- m MSL</span></div>
     <div class="metric-row"><span class="metric-label">Water Flow:</span><span class="metric-value" id="disp-dir">--</span></div>
     <div class="metric-row"><span class="metric-label">Surface Material:</span><span class="metric-value" id="disp-surface">--</span></div>
