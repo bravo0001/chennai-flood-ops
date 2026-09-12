@@ -38,5 +38,13 @@
     "image_url": "",
     "timestamp": "12 Sep 2026, 06:34 PM",
     "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
+  },
+  "GCC-MH-161699": {
+    "id": "GCC-MH-161699",
+    "status": "BLOCKED",
+    "notes": "Choked with plastic waste & silt",
+    "image_url": "",
+    "timestamp": "13 Sep 2026, 12:15 AM",
+    "alert_sent_to": "Greater Chennai Corporation (GCC) Stormwater Drainage Dept (SWD)"
   }
 }

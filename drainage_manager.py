@@ -5,12 +5,11 @@ from datetime import datetime
 INCIDENTS_FILE = "manhole_incidents.json"
 
 class ManholeManager:
-    def __init__(self, roads_data):
-        """Accept pre-loaded roads_data dict or a file path string."""
+    def __init__(self, roads_geojson_path="chennai_roads_elevated.geojson"):
         self.manholes = []
         self.incidents = {}
         self.load_incidents()
-        self.generate_municipal_manholes(roads_data)
+        self.generate_municipal_manholes(roads_geojson_path)
 
     def load_incidents(self):
         if os.path.exists(INCIDENTS_FILE):
@@ -26,19 +25,17 @@ class ManholeManager:
         with open(INCIDENTS_FILE, "w", encoding="utf-8") as f:
             json.dump(self.incidents, f, indent=2)
 
-    def generate_municipal_manholes(self, roads_data):
+    def generate_municipal_manholes(self, roads_path):
         """
         CPHEEO / Indian Municipal Standards:
         Stormwater inlets & maintenance manholes spaced every 40-50m
         along urban corridors and junctions.
-        Accept pre-loaded dict or file path string.
         """
-        # Support both pre-loaded dict and legacy file path
-        if isinstance(roads_data, str):
-            if not os.path.exists(roads_data):
-                return
-            with open(roads_data, "r", encoding="utf-8") as f:
-                roads_data = json.load(f)
+        if not os.path.exists(roads_path):
+            return
+
+        with open(roads_path, "r", encoding="utf-8") as f:
+            roads_data = json.load(f)
 
         mh_counter = 1000
         for feat in roads_data.get("features", []):

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import json, gc, os
+import json
 import urllib.request
 import uvicorn
 from hydraulics import calculate_road_depth
@@ -11,48 +11,23 @@ from router import FloodRouter
 app = FastAPI(title="Chennai Flood Early Warning & Emergency Navigation")
 
 print("Initializing Chennai Geo-Data into Memory...")
-
-# --- Slim-load roads: keep only essential properties ---
 with open("chennai_roads_elevated.geojson", "r", encoding="utf-8") as f:
-    raw = json.load(f)
+    roads_data = json.load(f)
 
-KEEP_PROPS = {
-    "elevation_msl", "flow_slope", "flow_direction",
-    "surface_material", "absorption_capacity", "runoff_coeff",
-    "pipe_dia_mm", "pipe_label"
-}
-
-slim_features = []
-for idx, feat in enumerate(raw.get("features", [])):
-    geom = feat.get("geometry", {})
-    coords = geom.get("coordinates", [])
-    # Keep only first + last coord for the routing graph (saves ~60% memory)
-    slim_coords = [coords[0], coords[-1]] if len(coords) >= 2 else coords
-    props = {k: v for k, v in feat.get("properties", {}).items() if k in KEEP_PROPS}
-    slim_features.append({
-        "type": "Feature",
-        "id": idx,
-        "geometry": {"type": "LineString", "coordinates": slim_coords},
-        "properties": props
-    })
-
-roads_data = {"type": "FeatureCollection", "features": slim_features}
-del raw, slim_features
-gc.collect()
+# Assign a unique integer ID to every road feature
+for idx, feat in enumerate(roads_data.get("features", [])):
+    feat["id"] = idx
 
 with open("chennai_hospitals.geojson", "r", encoding="utf-8") as f:
     hospitals_data = json.load(f)
 
 print(f"Loaded {len(roads_data['features'])} roads and {len(hospitals_data['features'])} medical centers.")
 
-# Build routing graph lazily (after data load + GC)
+# Initialize the routing engine
 router = FloodRouter(roads_data)
-gc.collect()
-print("Routing graph ready.")
-
 active_flood_depths = {}
 
-# --- API Endpoints ---
+# Endpoints for Frontend Map Layers
 @app.get("/api/roads")
 def get_roads():
     return JSONResponse(content=roads_data)
@@ -61,8 +36,10 @@ def get_roads():
 def get_hospitals():
     return JSONResponse(content=hospitals_data)
 
+# Real-Time Weather Ingestion Endpoint (Open-Meteo)
 @app.get("/api/live-weather")
 def get_live_weather():
+    # Chennai Coordinates: 13.0827 N, 80.2707 E
     url = (
         "https://api.open-meteo.com/v1/forecast?"
         "latitude=13.0827&longitude=80.2707&current="
@@ -82,12 +59,17 @@ def get_live_weather():
                 "wind_dir": current.get("wind_direction_10m", 45)
             }
     except Exception:
+        # Fallback realistic Chennai monsoon values agar internet issue ho
         return {
             "status": "fallback",
-            "temp": 28, "rain_mm": 12.4,
-            "humidity": 87, "wind_speed": 22, "wind_dir": 45
+            "temp": 28,
+            "rain_mm": 12.4,
+            "humidity": 87,
+            "wind_speed": 22,
+            "wind_dir": 45
         }
 
+# Data Models
 class SimRequest(BaseModel):
     rain_intensity: float
     duration_min: float
@@ -102,31 +84,40 @@ class RouteRequest(BaseModel):
     duration_min: float = 60.0
     drain_factor: float = 0.5
 
+# Simulation Calculation Endpoint
 @app.post("/api/simulate")
 def simulate(req: SimRequest):
     global active_flood_depths
     active_flood_depths.clear()
+    
     depth_updates = {}
     for feat in roads_data["features"]:
         fid = str(feat["id"])
         depth = calculate_road_depth(feat, req.rain_intensity, req.duration_min, req.drain_factor)
         active_flood_depths[feat["id"]] = depth
         depth_updates[fid] = depth
+
+    # Recalculate A* graph weights with dynamic road water column
     router.update_flood_weights(active_flood_depths)
     return {"depths": depth_updates}
 
+# Safe Routing Endpoint
 @app.post("/api/route")
 def get_safe_route(req: RouteRequest):
+    # Dynamic flood state sync before A* path search
     flood_depths = {}
     for feat in roads_data["features"]:
         depth = calculate_road_depth(feat, req.rain_intensity, req.duration_min, req.drain_factor)
         flood_depths[feat["id"]] = depth
+
     router.update_flood_weights(flood_depths)
     return router.find_safe_path(req.start_lat, req.start_lon, req.end_lat, req.end_lon)
 
-# --- Manhole endpoints ---
+# --- USP: Municipal Drainage Asset Endpoints ---
 from drainage_manager import ManholeManager
-manhole_mgr = ManholeManager(roads_data)
+
+# Initialize Manhole Manager
+manhole_mgr = ManholeManager("chennai_roads_elevated.geojson")
 
 @app.get("/api/manholes")
 def get_manholes():
@@ -137,20 +128,31 @@ class ReportRequest(BaseModel):
     notes: str = "Choked with plastic and silt"
     image_base64: str = ""
 
-class ResolveRequest(BaseModel):
-    id: str
-
 @app.post("/api/manhole/report")
 def report_manhole(req: ReportRequest):
     return manhole_mgr.report_blockage(req.id, req.notes, req.image_base64)
 
 @app.post("/api/manhole/resolve")
+def resolve_manhole(req: BaseModel):
+    # Payload me id aayegi
+    mh_id = getattr(req, "id", None)
+    if not mh_id:
+        # Pydantic dict check
+        pass
+    return {"status": "success"}
+
+# Agar BaseModel se simple handle karna ho:
+class ResolveRequest(BaseModel):
+    id: str
+
+@app.post("/api/manhole/resolve")
 def resolve_manhole(req: ResolveRequest):
     return manhole_mgr.resolve_blockage(req.id)
 
-# Mount static frontend
+# Mount Frontend static directory
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
+    import os
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
