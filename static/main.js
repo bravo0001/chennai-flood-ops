@@ -1,3 +1,6 @@
+// Relative path (Kyunki Cloud Run par hi frontend aur backend dono hain)
+const API_BASE = "";
+
 // 1. Crystal-Clear, Watermark-Free Basemaps
 const satTile = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
   maxZoom: 20,
