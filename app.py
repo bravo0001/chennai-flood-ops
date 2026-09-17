@@ -156,3 +156,13 @@ if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Har domain se request allow karega
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

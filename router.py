@@ -1,120 +1,116 @@
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-import json
-import urllib.request
-import uvicorn
-from hydraulics import calculate_road_depth
-from router import FloodRouter
+import networkx as nx
+import math
 
-app = FastAPI(title="Chennai Flood Early Warning & Emergency Navigation")
+class FloodRouter:
+    def __init__(self, geojson_data):
+        self.graph = nx.Graph()
+        self.build_base_graph(geojson_data)
+        self.ensure_connected_network()
 
-print("Initializing Chennai Geo-Data into Memory...")
-with open("chennai_roads_elevated.geojson", "r", encoding="utf-8") as f:
-    roads_data = json.load(f)
+    def haversine(self, lat1, lon1, lat2, lon2):
+        R = 6371000  # meters
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# Assign a unique integer ID to every road feature
-for idx, feat in enumerate(roads_data.get("features", [])):
-    feat["id"] = idx
+    def build_base_graph(self, data):
+        for feat in data.get("features", []):
+            coords = feat.get("geometry", {}).get("coordinates", [])
+            fid = feat.get("id")
+            if len(coords) >= 2:
+                # Har consecutive point ko edge banao taaki saare intermediate intersections connect hon
+                for i in range(len(coords) - 1):
+                    u = (round(coords[i][1], 5), round(coords[i][0], 5))
+                    v = (round(coords[i+1][1], 5), round(coords[i+1][0], 5))
+                    dist = max(1.0, self.haversine(u[0], u[1], v[0], v[1]))
+                    self.graph.add_edge(u, v, weight=dist, distance=dist, coords=[coords[i], coords[i+1]], fid=fid)
 
-with open("chennai_hospitals.geojson", "r", encoding="utf-8") as f:
-    hospitals_data = json.load(f)
+    def ensure_connected_network(self):
+        # Chhote dead-end components ko main arterial road network se snap karna
+        if not self.graph.nodes:
+            return
+        components = sorted(nx.connected_components(self.graph), key=len, reverse=True)
+        if len(components) > 1:
+            main_comp = components[0]
+            for comp in components[1:30]:  # Top subgraphs connect karo
+                sample_u = next(iter(comp))
+                nearest_v = min(main_comp, key=lambda v: self.haversine(sample_u[0], sample_u[1], v[0], v[1]))
+                d = self.haversine(sample_u[0], sample_u[1], nearest_v[0], nearest_v[1])
+                if d < 500:  # 500m ke andar bridge bana do
+                    self.graph.add_edge(sample_u, nearest_v, weight=d, distance=d, coords=[[sample_u[1], sample_u[0]], [nearest_v[1], nearest_v[0]]], fid=-1)
 
-print(f"Loaded {len(roads_data['features'])} roads and {len(hospitals_data['features'])} medical centers.")
+    def update_flood_weights(self, flood_depths_dict):
+        for u, v, data in self.graph.edges(data=True):
+            fid = data.get("fid")
+            depth = flood_depths_dict.get(fid, 0.0)
+            dist = data["distance"]
 
-# Initialize the routing engine
-router = FloodRouter(roads_data)
-active_flood_depths = {}
+            # Safe routing weight:
+            # Depth > 7 cm: Strict Block (10,000x)
+            # Depth 1.5 - 7 cm: Exponential Water Resistance
+            if depth > 7.0:
+                penalty = 10000.0
+            elif depth >= 1.5:
+                penalty = 1.0 + (depth * 2.5)  # Jitna zyada paani, utna zyada avoidance
+            else:
+                penalty = 1.0
 
-# Endpoints for Frontend Map Layers
-@app.get("/api/roads")
-def get_roads():
-    return JSONResponse(content=roads_data)
+            data["weight"] = dist * penalty
+            data["depth"] = depth
 
-@app.get("/api/hospitals")
-def get_hospitals():
-    return JSONResponse(content=hospitals_data)
+    def extract_path_geometry(self, path_nodes):
+        coords = []
+        total_dist = 0.0
+        flooded_segments = 0
+        for i in range(len(path_nodes) - 1):
+            data = self.graph.get_edge_data(path_nodes[i], path_nodes[i+1])
+            coords.extend(data.get("coords", []))
+            total_dist += data.get("distance", 0.0)
+            if data.get("depth", 0.0) > 7.0:
+                flooded_segments += 1
+        return coords, round(total_dist / 1000.0, 2), max(1, round((total_dist / 1000.0) * 2.2)), flooded_segments
 
-# Real-Time Weather Ingestion Endpoint (Open-Meteo)
-@app.get("/api/live-weather")
-def get_live_weather():
-    # Chennai Coordinates: 13.0827 N, 80.2707 E
-    url = (
-        "https://api.open-meteo.com/v1/forecast?"
-        "latitude=13.0827&longitude=80.2707&current="
-        "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m"
-    )
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            data = json.loads(response.read().decode())
-            current = data.get("current", {})
+    def find_safe_path(self, start_lat, start_lon, end_lat, end_lon):
+        # Major connected component se search karo taaki path guaranteed mile
+        components = sorted(nx.connected_components(self.graph), key=len, reverse=True)
+        main_nodes = list(components[0])
+
+        start_node = min(main_nodes, key=lambda n: self.haversine(start_lat, start_lon, n[0], n[1]))
+        end_node = min(main_nodes, key=lambda n: self.haversine(end_lat, end_lon, n[0], n[1]))
+
+        try:
+            # 1. NORMAL / FASTEST ROUTE (Sirf shortest distance dekhega, ignores flood)
+            normal_nodes = nx.astar_path(
+                self.graph, start_node, end_node,
+                heuristic=lambda a, b: self.haversine(a[0], a[1], b[0], b[1]),
+                weight="distance"
+            )
+            n_coords, n_dist, n_time, n_flooded = self.extract_path_geometry(normal_nodes)
+
+            # 2. FLOOD-AWARE SAFE ROUTE (Penalized flooded roads)
+            safe_nodes = nx.astar_path(
+                self.graph, start_node, end_node,
+                heuristic=lambda a, b: self.haversine(a[0], a[1], b[0], b[1]),
+                weight="weight"
+            )
+            s_coords, s_dist, s_time, s_flooded = self.extract_path_geometry(safe_nodes)
+
             return {
                 "status": "success",
-                "temp": current.get("temperature_2m", 28),
-                "rain_mm": current.get("precipitation", 12.4),
-                "humidity": current.get("relative_humidity_2m", 87),
-                "wind_speed": current.get("wind_speed_10m", 22),
-                "wind_dir": current.get("wind_direction_10m", 45)
+                "normal_route": {
+                    "coordinates": n_coords,
+                    "distance_km": n_dist,
+                    "est_time_min": n_time,
+                    "flooded_segments": n_flooded
+                },
+                "safe_route": {
+                    "coordinates": s_coords,
+                    "distance_km": s_dist,
+                    "est_time_min": s_time,
+                    "flooded_segments": s_flooded
+                }
             }
-    except Exception:
-        # Fallback realistic Chennai monsoon values agar internet issue ho
-        return {
-            "status": "fallback",
-            "temp": 28,
-            "rain_mm": 12.4,
-            "humidity": 87,
-            "wind_speed": 22,
-            "wind_dir": 45
-        }
-
-# Data Models
-class SimRequest(BaseModel):
-    rain_intensity: float
-    duration_min: float
-    drain_factor: float
-
-class RouteRequest(BaseModel):
-    start_lat: float
-    start_lon: float
-    end_lat: float
-    end_lon: float
-    rain_intensity: float = 25.0
-    duration_min: float = 60.0
-    drain_factor: float = 0.5
-
-# Simulation Calculation Endpoint
-@app.post("/api/simulate")
-def simulate(req: SimRequest):
-    global active_flood_depths
-    active_flood_depths.clear()
-    
-    depth_updates = {}
-    for feat in roads_data["features"]:
-        fid = str(feat["id"])
-        depth = calculate_road_depth(feat, req.rain_intensity, req.duration_min, req.drain_factor)
-        active_flood_depths[feat["id"]] = depth
-        depth_updates[fid] = depth
-
-    # Recalculate A* graph weights with dynamic road water column
-    router.update_flood_weights(active_flood_depths)
-    return {"depths": depth_updates}
-
-# Safe Routing Endpoint
-@app.post("/api/route")
-def get_safe_route(req: RouteRequest):
-    # Dynamic flood state sync before A* path search
-    flood_depths = {}
-    for feat in roads_data["features"]:
-        depth = calculate_road_depth(feat, req.rain_intensity, req.duration_min, req.drain_factor)
-        flood_depths[feat["id"]] = depth
-
-    router.update_flood_weights(flood_depths)
-    return router.find_safe_path(req.start_lat, req.start_lon, req.end_lat, req.end_lon)
-
-# Mount Frontend static directory
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
-if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+        except Exception as e:
+            return {"status": "error", "message": str(e)}

@@ -1,0 +1,68 @@
+# Chennai Flood Early Warning & AI Safe Navigation System
+
+An intelligent, real-time hydrological simulation and dynamic emergency routing engine designed for Chennai's urban flood resilience. The platform integrates digital elevation models, live precipitation data, and dynamic graph-weight penalization to compute safe transit corridors for emergency response vehicles and citizens during severe monsoonal events.
+
+---
+
+## 📸 Key Features & Visual Walkthrough
+
+> *Note: Place all screenshots in the `screenshots/` directory using the referenced filenames.*
+
+### 1. Interactive Flood Severity Heatmap & Elevation Grid
+Dynamic visualization of Chennai's road network categorized by real-time waterlogging depths (Safe, Moderate, Severe, Inundated).
+![Elevation & Inundation Map](screenshots/01_flood_map_overview.png)
+
+### 2. Real-Time Meteorological Synchronization
+Live automated weather ingestion via Open-Meteo API capturing current precipitation, humidity, wind velocity, and local cloud cover in Chennai.
+![Live Weather Ingestion](screenshots/02_live_weather_sync.png)
+
+### 3. Dynamic Hydrological Flood Simulation
+Interactive simulation controls allowing users to adjust rainfall intensity ($mm/hr$), duration ($minutes$), and drainage efficiency factors to predict localized water column depths across 74,000+ road segments.
+![Hydrology Simulation Controls](screenshots/03_hydrology_simulation.png)
+
+### 4. A* Safe Navigation vs. Shortest Path Routing
+Heuristic pathfinding engine demonstrating both standard shortest routes (often cut off by deep water) and dynamically rerouted flood-safe corridors avoiding hazardous roads.
+![A-Star Safe Routing Demo](screenshots/04_astar_routing_comparison.png)
+
+### 5. Critical Healthcare Facility Proximity
+Geospatial overlay of 1,200+ hospitals and emergency triage centers across Chennai, enabling direct safe-route computation during medical evacuations.
+![Hospital & Medical Centers](screenshots/05_hospital_network.png)
+
+### 6. Municipal Drainage & Manhole Asset Management
+Crowdsourced citizen reporting interface and municipal console for logging blocked drains, choked culverts, and resolving water flow bottlenecks with photo proof.
+![Drainage Asset Reporting](screenshots/06_manhole_reporting.png)
+
+---
+
+## 🛠️ Architecture & Tech Stack
+
+* **Backend Engine:** Python 3.11, FastAPI, Uvicorn
+* **Spatial Graph Algorithms:** NetworkX (Heuristic $A^*$ routing with dynamic edge weighting)
+* **Frontend Visualization:** Leaflet.js, OpenStreetMap GeoJSON layers, Vanilla JS / CSS3
+* **Data Sources:** OpenStreetMap Highway GeoJSON, Chennai Elevation Raster/GeoJSON, Open-Meteo Weather API
+* **Deployment Support:** Docker, Google Cloud Run, GitHub Pages
+
+---
+
+## ⚡ Local Setup & Execution
+
+### Prerequisites
+* Python 3.10 or higher
+* Git
+
+### Installation
+
+```bash
+# Clone the repository
+git clone [https://github.com/bravo0001/chennai-flood-ops.git](https://github.com/bravo0001/chennai-flood-ops.git)
+cd chennai-flood-ops
+
+# Create and activate virtual environment
+python -m venv .venv
+# On Windows:
+.\.venv\Scripts\activate
+# On Linux/macOS:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt

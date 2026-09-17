@@ -356,9 +356,9 @@ function requestSafeRoute() {
     // 2. Normal Route (Dashed Coral/Red)
     const normalPath = data.normal_route.coordinates.map(c => [c[1], c[0]]);
     const normalPoly = L.polyline(normalPath, {
-      color: "#ff4757",
+      color: "#000000ff",
       weight: 3.5,
-      dashArray: "6, 8",
+      dashArray: "8, 8",
       opacity: 0.95
     }).addTo(navigationGroup);
     normalPoly.bindTooltip("Normal Shortest Route (Dashed)", { sticky: true });
