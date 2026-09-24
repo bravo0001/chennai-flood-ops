@@ -12,7 +12,7 @@ class ManholeManager:
         self.generate_municipal_manholes(roads_geojson_path)
 
     def load_incidents(self):
-        if os.path.exists(INCIDENTS_FILE):
+        if os.path.exists(INCIDENTS_FILE) and os.path.getsize(INCIDENTS_FILE) > 0:
             try:
                 with open(INCIDENTS_FILE, "r", encoding="utf-8") as f:
                     self.incidents = json.load(f)
@@ -31,11 +31,15 @@ class ManholeManager:
         Stormwater inlets & maintenance manholes spaced every 40-50m
         along urban corridors and junctions.
         """
-        if not os.path.exists(roads_path):
+        if not os.path.exists(roads_path) or os.path.getsize(roads_path) == 0:
             return
 
-        with open(roads_path, "r", encoding="utf-8") as f:
-            roads_data = json.load(f)
+        try:
+            with open(roads_path, "r", encoding="utf-8") as f:
+                roads_data = json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to load {roads_path} in ManholeManager: {e}")
+            return
 
         mh_counter = 1000
         for feat in roads_data.get("features", []):
