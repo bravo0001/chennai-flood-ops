@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import os
 import json
 import urllib.request
 import uvicorn
@@ -10,16 +11,27 @@ from router import FloodRouter
 
 app = FastAPI(title="Chennai Flood Early Warning & Emergency Navigation")
 
+def safe_load_geojson(filepath: str, default_features: list = None):
+    """Safely loads a GeoJSON file; falls back to default structure if empty or missing."""
+    default = {"type": "FeatureCollection", "features": default_features or []}
+    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to parse {filepath}: {e}. Using fallback.")
+            return default
+    print(f"Warning: {filepath} is missing or 0 bytes. Using fallback.")
+    return default
+
 print("Initializing Chennai Geo-Data into Memory...")
-with open("chennai_roads_elevated.geojson", "r", encoding="utf-8") as f:
-    roads_data = json.load(f)
+roads_data = safe_load_geojson("chennai_roads_elevated.geojson")
 
 # Assign a unique integer ID to every road feature
 for idx, feat in enumerate(roads_data.get("features", [])):
     feat["id"] = idx
 
-with open("chennai_hospitals.geojson", "r", encoding="utf-8") as f:
-    hospitals_data = json.load(f)
+hospitals_data = safe_load_geojson("chennai_hospitals.geojson")
 
 print(f"Loaded {len(roads_data['features'])} roads and {len(hospitals_data['features'])} medical centers.")
 
@@ -132,16 +144,6 @@ class ReportRequest(BaseModel):
 def report_manhole(req: ReportRequest):
     return manhole_mgr.report_blockage(req.id, req.notes, req.image_base64)
 
-@app.post("/api/manhole/resolve")
-def resolve_manhole(req: BaseModel):
-    # Payload me id aayegi
-    mh_id = getattr(req, "id", None)
-    if not mh_id:
-        # Pydantic dict check
-        pass
-    return {"status": "success"}
-
-# Agar BaseModel se simple handle karna ho:
 class ResolveRequest(BaseModel):
     id: str
 
@@ -152,11 +154,6 @@ def resolve_manhole(req: ResolveRequest):
 # Mount Frontend static directory
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
-
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
@@ -166,3 +163,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
