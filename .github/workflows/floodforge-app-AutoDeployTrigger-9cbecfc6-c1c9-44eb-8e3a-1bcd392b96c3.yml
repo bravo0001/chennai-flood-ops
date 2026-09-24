@@ -22,7 +22,9 @@ jobs:
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Azure Login
         uses: azure/login@v2
@@ -45,5 +47,3 @@ jobs:
           imageToBuild: floodforge.azurecr.io/floodforge-app:${{ github.sha }}
           _buildArgumentsKey_: |
             _buildArgumentsValues_
-
-
